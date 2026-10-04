@@ -8,7 +8,7 @@ export interface VisitorStats {
   error?: string | null;
 }
 
-const COUNTER_NAMESPACE = 'ravi003-portfolio';
+const COUNTER_NAMESPACE = 'ravi003-portfolio-158';
 const COUNTER_ACTION = 'view';
 const COUNTER_KEY = 'portfolio';
 
