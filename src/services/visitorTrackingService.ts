@@ -281,7 +281,7 @@ export class VisitorTrackingService {
 
           // Ensure at least 1 when active visitor is connected
           onStatsUpdate({
-            liveVisitors: Math.max(1, activeCount),
+            liveVisitors: activeCount,
           });
         },
         (error) => {
