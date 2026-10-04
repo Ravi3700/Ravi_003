@@ -20,8 +20,8 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
   } = useVisitorStats();
 
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const isConnected = isFirebaseConnected;
 
-  // Variant 1: Hero area compact pill
   if (variant === 'hero' || variant === 'badge') {
     return (
       <>
@@ -30,16 +30,15 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
           className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border bg-white/80 dark:bg-slate-900/80 backdrop-blur-xs text-xs shadow-2xs transition-all ${className}`}
           style={{ borderColor: 'var(--border-default)' }}
         >
-          {/* Live pulse dot */}
           <span className="relative flex h-2 w-2">
-            {isFirebaseConnected && (
+            {isConnected && (
               <span
                 style={{ backgroundColor: 'var(--accent-emerald)' }}
                 className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
               />
             )}
             <span
-              style={{ backgroundColor: isFirebaseConnected ? 'var(--accent-emerald)' : '#94a3b8' }}
+              style={{ backgroundColor: isConnected ? 'var(--accent-emerald)' : '#94a3b8' }}
               className="relative inline-flex rounded-full h-2 w-2"
             />
           </span>
@@ -58,10 +57,9 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
             </span>
           </div>
 
-          {isFirebaseConnected && liveVisitors > 0 && (
+          {isConnected && (
             <>
               <span className="text-slate-300 dark:text-slate-700">•</span>
-              {/* Live visitor count */}
               <div className="flex items-center gap-1 text-[11px]" style={{ color: 'var(--text-secondary)' }}>
                 <Activity className="w-3 h-3 text-emerald-500" />
                 <span>{liveVisitors} {liveVisitors === 1 ? 'active now' : 'active now'}</span>
@@ -69,7 +67,6 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
             </>
           )}
 
-          {/* Info trigger */}
           <button
             type="button"
             onClick={() => setShowInfoModal(true)}
@@ -80,15 +77,11 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
           </button>
         </div>
 
-        {/* Info Modal */}
-        {showInfoModal && (
-          <VisitorInfoModal onClose={() => setShowInfoModal(false)} />
-        )}
+        {showInfoModal && <VisitorInfoModal onClose={() => setShowInfoModal(false)} />}
       </>
     );
   }
 
-  // Variant 2: Footer area statistics block
   return (
     <>
       <div
@@ -100,7 +93,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
             <Users className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-white text-sm">
                 {isLoading ? (
                   <span className="inline-block w-12 h-4 bg-white/20 animate-pulse rounded" />
@@ -109,27 +102,29 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
                 )}
               </span>
               <span className="text-slate-300 font-medium">Total Unique Visitors</span>
-              {isFirebaseConnected ? (
+              {isConnected ? (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Firebase Live
+                  Live Counter
                 </span>
               ) : (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-500/20 text-slate-400 border border-slate-500/30">
-                  Awaiting Config
+                  Connecting
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
-              {isFirebaseConnected && liveVisitors > 0 ? (
+              {isConnected ? (
                 <>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-emerald-300 font-medium">{liveVisitors} {liveVisitors === 1 ? 'Visitor Active Now' : 'Visitors Active Now'}</span>
+                    <span className="text-emerald-300 font-medium">
+                      {liveVisitors} {liveVisitors === 1 ? 'Visitor Active Now' : 'Visitors Active Now'}
+                    </span>
                   </span>
                   <span>•</span>
                 </>
               ) : null}
-              <span>Deduplicated via Anonymous Auth</span>
+              <span>Unique browser/device counting • live activity updates automatically</span>
             </div>
           </div>
         </div>
@@ -144,14 +139,11 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
         </button>
       </div>
 
-      {showInfoModal && (
-        <VisitorInfoModal onClose={() => setShowInfoModal(false)} />
-      )}
+      {showInfoModal && <VisitorInfoModal onClose={() => setShowInfoModal(false)} />}
     </>
   );
 };
 
-// Informational modal explaining unique deduplication and privacy
 const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <div
@@ -168,7 +160,7 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <ShieldCheck className="w-4 h-4" />
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-              Unique Visitor Tracking Architecture
+              Visitor Counter Technology
             </h3>
           </div>
           <button
@@ -182,30 +174,30 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2.5 leading-relaxed">
           <p>
-            This portfolio uses <strong>Firebase Anonymous Authentication</strong> coupled with <strong>Cloud Firestore</strong> atomic transactions to provide a genuine, non-inflatable visitor counter:
+            This portfolio uses a public <strong>CounterAPI</strong> service for visitor counting, so it works directly from GitHub Pages without Firebase credentials or a private backend.
           </p>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 space-y-1.5">
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Deduplicated:</strong> Page refreshes, section browsing, and returning sessions from this browser do <em>not</em> create additional counts.</span>
+              <span><strong>Unique counting:</strong> A persistent anonymous browser/device ID prevents normal refreshes from adding another unique visitor.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Atomic Counting:</strong> Uses Firestore atomic transactions to prevent race conditions and lost increments.</span>
+              <span><strong>Live presence:</strong> Each open browser sends a lightweight heartbeat and the live number is recalculated from activity in the last 5 minutes.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>100% Privacy Preserving:</strong> No personal info, canvas fingerprinting, or IP logging is ever collected or stored.</span>
+              <span><strong>Automatic updates:</strong> The counter refreshes its live value every 15 seconds without a page reload.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>GitHub Pages Compatible:</strong> Completely serverless, operating directly from static client builds.</span>
+              <span><strong>GitHub Pages compatible:</strong> No server process or Firebase secret is required by the visitor counter.</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400">
-            * <em>Note:</em> Defined as unique browser/device identity. Clearing browser data or opening incognito creates a new anonymous session.
+            * <em>Note:</em> “Unique visitor” means a browser/device identity. Clearing site storage or using a new/incognito browser creates a new identity. “Active now” means activity recorded within the last 5 minutes.
           </p>
         </div>
 
