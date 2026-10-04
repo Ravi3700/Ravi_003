@@ -12,21 +12,31 @@ const COUNTER_API_BASE = 'https://counterapi.com/api';
 const COUNTER_NAMESPACE = 'ravi3700.github.io-Ravi_003';
 const TOTAL_ACTION = 'view';
 const TOTAL_KEY = 'portfolio';
+const HEARTBEAT_ACTION = 'heartbeat';
 const ACTIVE_WINDOW = '5m';
-
-const emptyStats = (): VisitorStats => ({
-  totalUniqueVisitors: null,
-  liveVisitors: 0,
-  isLive: false,
-  isLoading: false,
-  isFirebaseConnected: false,
-  error: null,
-});
+const VISITOR_ID_KEY = 'portfolio_visitor_id';
 
 type CounterResponse = {
   value?: number;
   abv?: string;
 };
+
+function getVisitorId(): string {
+  try {
+    const existing = window.localStorage.getItem(VISITOR_ID_KEY);
+    if (existing) return existing;
+
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    window.localStorage.setItem(VISITOR_ID_KEY, id);
+    return id;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
 
 async function readCounter(url: string): Promise<number> {
   const response = await fetch(url, {
@@ -40,11 +50,26 @@ async function readCounter(url: string): Promise<number> {
   }
 
   const data = (await response.json()) as CounterResponse;
+
   if (typeof data.value !== 'number') {
     throw new Error('Counter API returned an invalid value');
   }
 
   return data.value;
+}
+
+function apiUrl(
+  action: string,
+  key: string,
+  params: Record<string, string | boolean> = {}
+): string {
+  const search = new URLSearchParams();
+
+  Object.entries(params).forEach(([name, value]) => {
+    search.set(name, String(value));
+  });
+
+  return `${COUNTER_API_BASE}/${encodeURIComponent(COUNTER_NAMESPACE)}/${encodeURIComponent(action)}/${encodeURIComponent(key)}?${search.toString()}`;
 }
 
 export class VisitorTrackingService {
@@ -58,81 +83,84 @@ export class VisitorTrackingService {
     return VisitorTrackingService.instance;
   }
 
-  /**
-   * GitHub Pages is static, so the visitor counter must not depend on the
-   * Express server or missing Firebase build secrets.
-   *
-   * CounterAPI provides a public HTTPS counter endpoint. Its unique=true
-   * mode deduplicates visitors using an anonymous generated user hash.
-   * The active counter uses a read-only 5-minute timeline.
-   */
   public async startTracking(
     onStatsUpdate: (stats: Partial<VisitorStats>) => void
   ): Promise<void> {
+    this.cleanup();
+
     onStatsUpdate({
-      ...emptyStats(),
+      totalUniqueVisitors: null,
+      liveVisitors: 0,
+      isLive: false,
       isLoading: true,
+      isFirebaseConnected: false,
+      error: null,
     });
 
+    const visitorId = getVisitorId();
+
     try {
-      const totalUrl =
-        `${COUNTER_API_BASE}/${encodeURIComponent(COUNTER_NAMESPACE)}/${TOTAL_ACTION}/${TOTAL_KEY}?unique=true`;
+      // One persistent anonymous ID per browser/device. CounterAPI uses this
+      // ID for unique-user aggregation instead of treating every heartbeat
+      // as a new visitor.
+      const totalUniqueVisitors = await readCounter(
+        apiUrl(TOTAL_ACTION, TOTAL_KEY, {
+          unique: true,
+          userId: visitorId,
+        })
+      );
 
-      // This request records the current visit and returns the deduplicated total.
-      const totalUniqueVisitors = await readCounter(totalUrl);
-
-      onStatsUpdate({
-        totalUniqueVisitors,
-        isLive: true,
-        isLoading: false,
-        isFirebaseConnected: false,
-        error: null,
-      });
-
-      // Read-only rolling window: visitors seen in the last 5 minutes.
-      try {
-        const activeUrl =
-          `${COUNTER_API_BASE}/${encodeURIComponent(COUNTER_NAMESPACE)}/any/any?timeline=${ACTIVE_WINDOW}`;
-        const liveVisitors = await readCounter(activeUrl);
-
-        onStatsUpdate({
-          liveVisitors: Math.max(1, liveVisitors),
-          isLive: true,
-          isLoading: false,
-          error: null,
-        });
-      } catch (activeError) {
-        console.warn('[Visitor Counter] Active visitor read failed:', activeError);
-        // Total visitor counting remains valid even if the optional live-presence
-        // query is temporarily unavailable.
-        onStatsUpdate({
-          liveVisitors: 1,
-          isLive: true,
-          isLoading: false,
-        });
-      }
-
-      // Refresh the live-presence number periodically while the page remains open.
-      this.heartbeatInterval = setInterval(async () => {
+      const sendHeartbeat = async () => {
         try {
-          const activeUrl =
-            `${COUNTER_API_BASE}/${encodeURIComponent(COUNTER_NAMESPACE)}/any/any?timeline=${ACTIVE_WINDOW}`;
-          const liveVisitors = await readCounter(activeUrl);
+          await readCounter(
+            apiUrl(HEARTBEAT_ACTION, TOTAL_KEY, {
+              userId: visitorId,
+            })
+          );
+
+          const liveVisitors = await readCounter(
+            apiUrl('any', 'any', {
+              timeline: ACTIVE_WINDOW,
+              unique: true,
+            })
+          );
+
           onStatsUpdate({
-            liveVisitors: Math.max(1, liveVisitors),
+            totalUniqueVisitors,
+            liveVisitors,
             isLive: true,
+            isLoading: false,
+            isFirebaseConnected: false,
+            visitorUid: visitorId,
+            error: null,
           });
-        } catch {
-          // Keep the last known active count during transient network failures.
+        } catch (error) {
+          console.warn('[Visitor Counter] Heartbeat failed:', error);
+          onStatsUpdate({
+            totalUniqueVisitors,
+            isLive: true,
+            isLoading: false,
+            visitorUid: visitorId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
-      }, 60_000);
+      };
+
+      // Register this device immediately, then keep it alive every minute.
+      await sendHeartbeat();
+
+      this.heartbeatInterval = setInterval(sendHeartbeat, 60_000);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn('[Visitor Counter] Initialization failed:', message);
 
       onStatsUpdate({
-        ...emptyStats(),
+        totalUniqueVisitors: null,
+        liveVisitors: 0,
+        isLive: false,
         isLoading: false,
+        isFirebaseConnected: false,
+        visitorUid: visitorId,
         error: message,
       });
     }
