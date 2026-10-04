@@ -4,11 +4,11 @@ const TOTAL_ACTION = 'view';
 const TOTAL_KEY = 'site';
 const PRESENCE_ACTION = 'presence';
 const PRESENCE_KEY = 'site';
-const LIVE_AGGREGATE_ACTION = 'any';
-const LIVE_AGGREGATE_KEY = 'any';
+const LIVE_AGGREGATE_ACTION = PRESENCE_ACTION;
+const LIVE_AGGREGATE_KEY = PRESENCE_KEY;
 const LIVE_WINDOW = '2m';
 const POLL_INTERVAL_MS = 10000;
-const HEARTBEAT_INTERVAL_MS = 30000;
+const HEARTBEAT_INTERVAL_MS = 20000;
 
 export interface VisitorStats {
   totalUniqueVisitors: number | null;
@@ -56,6 +56,11 @@ async function counterRequest(
   Object.entries(params).forEach(([name, value]) => {
     url.searchParams.set(name, String(value));
   });
+
+  // CounterAPI is accessed through a public GET endpoint. Add a cache-buster
+  // so different devices never receive a stale aggregate response from an
+  // intermediary cache/CDN.
+  url.searchParams.set('_cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
   const response = await fetch(url.toString(), {
     method: 'GET',
@@ -156,22 +161,12 @@ export class VisitorTrackingService {
         const apiCount = Math.max(0, Number(live?.value ?? 0));
 
         onStatsUpdate({
-          // If the presence write succeeded but the aggregate endpoint briefly
-          // lags, the browser that just sent the heartbeat is still active.
-          liveVisitors: presenceConfirmed ? Math.max(1, apiCount) : apiCount,
+          liveVisitors: apiCount,
           isLive: true,
           isFirebaseConnected: true,
           isLoading: false,
         });
       } catch (error) {
-        if (presenceConfirmed) {
-          onStatsUpdate({
-            liveVisitors: 1,
-            isLive: true,
-            isFirebaseConnected: true,
-            isLoading: false,
-          });
-        }
         console.warn('[Visitor Counter] Live counter error:', error);
       }
     };
