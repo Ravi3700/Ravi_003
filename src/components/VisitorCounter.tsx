@@ -129,7 +129,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
                   <span>•</span>
                 </>
               ) : null}
-              <span>Deduplicated via Anonymous Auth</span>
+              <span>Active device presence</span>
             </div>
           </div>
         </div>
@@ -168,7 +168,7 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <ShieldCheck className="w-4 h-4" />
             </div>
             <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-              Unique Visitor Tracking Architecture
+              Live Visitor Tracking Architecture
             </h3>
           </div>
           <button
@@ -182,30 +182,30 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2.5 leading-relaxed">
           <p>
-            This portfolio uses <strong>Firebase Anonymous Authentication</strong> coupled with <strong>Cloud Firestore</strong> atomic transactions to provide a genuine, non-inflatable visitor counter:
+            This portfolio uses a privacy-preserving anonymous browser/device ID with a short-lived presence heartbeat to show currently active devices:
           </p>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 space-y-1.5">
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Deduplicated:</strong> Page refreshes, section browsing, and returning sessions from this browser do <em>not</em> create additional counts.</span>
+              <span><strong>Device presence:</strong> Each browser/device sends a short-lived presence signal while the portfolio is open.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Atomic Counting:</strong> Uses Firestore atomic transactions to prevent race conditions and lost increments.</span>
+              <span><strong>Live window:</strong> Only recent presence signals are included, so inactive devices naturally disappear.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>100% Privacy Preserving:</strong> No personal info, canvas fingerprinting, or IP logging is ever collected or stored.</span>
+              <span><strong>Privacy preserving:</strong> No name, email, fingerprint, or personal information is collected by the portfolio.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>GitHub Pages Compatible:</strong> Completely serverless, operating directly from static client builds.</span>
+              <span><strong>GitHub Pages Compatible:</strong> Runs from the static portfolio without requiring the Express server.</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400">
-            * <em>Note:</em> Defined as unique browser/device identity. Clearing browser data or opening incognito creates a new anonymous session.
+            * <em>Note:</em> Live count is an estimate of active browser/device sessions within the recent presence window. Clearing browser data creates a new anonymous device ID.
           </p>
         </div>
 
