@@ -13,12 +13,12 @@ const COUNTER_NAMESPACE = 'ravi3700.github.io-Ravi_003';
 const TOTAL_ACTION = 'view';
 const TOTAL_KEY = 'portfolio';
 
-// IMPORTANT: presence is deliberately a separate action. We count presence
-// events (not CounterAPI's unique-user hash) because unique aggregation can
-// collapse multiple devices behind the same network/user hash.
+// Presence is a separate event so active devices are counted independently
+// from normal page-view totals.
 const PRESENCE_ACTION = 'portfolioPresence';
 const ACTIVE_WINDOW = '5m';
 const PRESENCE_INTERVAL = 4 * 60_000;
+const LIVE_POLL_INTERVAL = 15_000;
 const PRESENCE_LOCK_TTL = 2 * 60_000;
 const VISITOR_ID_KEY = 'portfolio_visitor_id';
 const PRESENCE_LOCK_KEY = 'portfolio_presence_owner';
@@ -54,7 +54,11 @@ function ownsPresenceLock(visitorId: string): boolean {
       const [owner, timestamp] = current.split('|');
       const lockTime = Number(timestamp);
 
-      if (owner !== visitorId && Number.isFinite(lockTime) && now - lockTime < PRESENCE_LOCK_TTL) {
+      if (
+        owner !== visitorId &&
+        Number.isFinite(lockTime) &&
+        now - lockTime < PRESENCE_LOCK_TTL
+      ) {
         return false;
       }
     }
@@ -103,6 +107,7 @@ function apiUrl(
 export class VisitorTrackingService {
   private static instance: VisitorTrackingService;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  private livePollInterval: ReturnType<typeof setInterval> | null = null;
 
   public static getInstance(): VisitorTrackingService {
     if (!VisitorTrackingService.instance) {
@@ -128,6 +133,8 @@ export class VisitorTrackingService {
     const visitorId = getVisitorId();
 
     try {
+      // The same anonymous browser/device ID is reused, so a returning
+      // visitor is not counted as a new unique visitor.
       const totalUniqueVisitors = await readCounter(
         apiUrl(TOTAL_ACTION, TOTAL_KEY, {
           unique: true,
@@ -135,21 +142,8 @@ export class VisitorTrackingService {
         })
       );
 
-      const sendPresence = async () => {
-        if (!ownsPresenceLock(visitorId)) {
-          return;
-        }
-
+      const refreshLiveCount = async () => {
         try {
-          // One presence event per active browser/device every 4 minutes.
-          // The 5-minute aggregation window therefore contributes ~1 event
-          // per active device instead of collapsing devices by IP/user hash.
-          await readCounter(
-            apiUrl(PRESENCE_ACTION, TOTAL_KEY, {
-              userId: visitorId,
-            })
-          );
-
           const liveVisitors = await readCounter(
             apiUrl('any', 'any', {
               timeline: ACTIVE_WINDOW,
@@ -167,7 +161,7 @@ export class VisitorTrackingService {
             error: null,
           });
         } catch (error) {
-          console.warn('[Visitor Counter] Presence update failed:', error);
+          console.warn('[Visitor Counter] Live count refresh failed:', error);
           onStatsUpdate({
             totalUniqueVisitors,
             liveVisitors: 0,
@@ -179,8 +173,37 @@ export class VisitorTrackingService {
         }
       };
 
+      const sendPresence = async () => {
+        if (!ownsPresenceLock(visitorId)) {
+          return;
+        }
+
+        try {
+          // One presence event per active browser/device every 4 minutes.
+          // The live aggregation uses a 5-minute window, so active devices
+          // remain visible between heartbeats.
+          await readCounter(
+            apiUrl(PRESENCE_ACTION, TOTAL_KEY, {
+              userId: visitorId,
+            })
+          );
+
+          await refreshLiveCount();
+        } catch (error) {
+          console.warn('[Visitor Counter] Presence update failed:', error);
+          await refreshLiveCount();
+        }
+      };
+
+      // Register this device immediately.
       await sendPresence();
+
+      // Keep this device marked active without requiring a page refresh.
       this.heartbeatInterval = setInterval(sendPresence, PRESENCE_INTERVAL);
+
+      // Refresh the displayed live number frequently so another device
+      // joining/leaving is reflected automatically without a page refresh.
+      this.livePollInterval = setInterval(refreshLiveCount, LIVE_POLL_INTERVAL);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn('[Visitor Counter] Initialization failed:', message);
@@ -201,6 +224,11 @@ export class VisitorTrackingService {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
+    }
+
+    if (this.livePollInterval) {
+      clearInterval(this.livePollInterval);
+      this.livePollInterval = null;
     }
   }
 }
