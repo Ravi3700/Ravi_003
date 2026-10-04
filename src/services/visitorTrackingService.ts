@@ -12,9 +12,16 @@ const COUNTER_API_BASE = 'https://counterapi.com/api';
 const COUNTER_NAMESPACE = 'ravi3700.github.io-Ravi_003';
 const TOTAL_ACTION = 'view';
 const TOTAL_KEY = 'portfolio';
-const HEARTBEAT_ACTION = 'heartbeat';
+
+// IMPORTANT: presence is deliberately a separate action. We count presence
+// events (not CounterAPI's unique-user hash) because unique aggregation can
+// collapse multiple devices behind the same network/user hash.
+const PRESENCE_ACTION = 'portfolioPresence';
 const ACTIVE_WINDOW = '5m';
+const PRESENCE_INTERVAL = 4 * 60_000;
+const PRESENCE_LOCK_TTL = 2 * 60_000;
 const VISITOR_ID_KEY = 'portfolio_visitor_id';
+const PRESENCE_LOCK_KEY = 'portfolio_presence_owner';
 
 type CounterResponse = {
   value?: number;
@@ -35,6 +42,27 @@ function getVisitorId(): string {
     return id;
   } catch {
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
+
+function ownsPresenceLock(visitorId: string): boolean {
+  try {
+    const now = Date.now();
+    const current = window.localStorage.getItem(PRESENCE_LOCK_KEY);
+
+    if (current) {
+      const [owner, timestamp] = current.split('|');
+      const lockTime = Number(timestamp);
+
+      if (owner !== visitorId && Number.isFinite(lockTime) && now - lockTime < PRESENCE_LOCK_TTL) {
+        return false;
+      }
+    }
+
+    window.localStorage.setItem(PRESENCE_LOCK_KEY, `${visitorId}|${now}`);
+    return true;
+  } catch {
+    return true;
   }
 }
 
@@ -100,9 +128,6 @@ export class VisitorTrackingService {
     const visitorId = getVisitorId();
 
     try {
-      // One persistent anonymous ID per browser/device. CounterAPI uses this
-      // ID for unique-user aggregation instead of treating every heartbeat
-      // as a new visitor.
       const totalUniqueVisitors = await readCounter(
         apiUrl(TOTAL_ACTION, TOTAL_KEY, {
           unique: true,
@@ -110,18 +135,25 @@ export class VisitorTrackingService {
         })
       );
 
-      const sendHeartbeat = async () => {
+      const sendPresence = async () => {
+        if (!ownsPresenceLock(visitorId)) {
+          return;
+        }
+
         try {
+          // One presence event per active browser/device every 4 minutes.
+          // The 5-minute aggregation window therefore contributes ~1 event
+          // per active device instead of collapsing devices by IP/user hash.
           await readCounter(
-            apiUrl(HEARTBEAT_ACTION, TOTAL_KEY, {
+            apiUrl(PRESENCE_ACTION, TOTAL_KEY, {
               userId: visitorId,
             })
           );
 
           const liveVisitors = await readCounter(
-            apiUrl('any', 'any', {
+            apiUrl(PRESENCE_ACTION, 'any', {
               timeline: ACTIVE_WINDOW,
-              unique: true,
+              unique: false,
             })
           );
 
@@ -135,10 +167,11 @@ export class VisitorTrackingService {
             error: null,
           });
         } catch (error) {
-          console.warn('[Visitor Counter] Heartbeat failed:', error);
+          console.warn('[Visitor Counter] Presence update failed:', error);
           onStatsUpdate({
             totalUniqueVisitors,
-            isLive: true,
+            liveVisitors: 0,
+            isLive: false,
             isLoading: false,
             visitorUid: visitorId,
             error: error instanceof Error ? error.message : String(error),
@@ -146,10 +179,8 @@ export class VisitorTrackingService {
         }
       };
 
-      // Register this device immediately, then keep it alive every minute.
-      await sendHeartbeat();
-
-      this.heartbeatInterval = setInterval(sendHeartbeat, 60_000);
+      await sendPresence();
+      this.heartbeatInterval = setInterval(sendPresence, PRESENCE_INTERVAL);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn('[Visitor Counter] Initialization failed:', message);
