@@ -4,6 +4,8 @@ const TOTAL_ACTION = 'view';
 const TOTAL_KEY = 'site';
 const PRESENCE_ACTION = 'presence';
 const PRESENCE_KEY = 'site';
+const LIVE_AGGREGATE_ACTION = 'any';
+const LIVE_AGGREGATE_KEY = 'any';
 const LIVE_WINDOW = '2m';
 const POLL_INTERVAL_MS = 10000;
 const HEARTBEAT_INTERVAL_MS = 30000;
@@ -133,6 +135,7 @@ export class VisitorTrackingService {
         await counterRequest(PRESENCE_ACTION, PRESENCE_KEY, {
           userId: this.visitorId,
           behavior: 'view',
+          trackOnly: true,
         });
         presenceConfirmed = true;
         return true;
@@ -144,7 +147,7 @@ export class VisitorTrackingService {
 
     const readLiveCount = async () => {
       try {
-        const live = await counterRequest(PRESENCE_ACTION, PRESENCE_KEY, {
+        const live = await counterRequest(LIVE_AGGREGATE_ACTION, LIVE_AGGREGATE_KEY, {
           timeline: LIVE_WINDOW,
           unique: true,
           readOnly: true,
