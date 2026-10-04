@@ -151,9 +151,9 @@ export class VisitorTrackingService {
           );
 
           const liveVisitors = await readCounter(
-            apiUrl(PRESENCE_ACTION, 'any', {
+            apiUrl('any', 'any', {
               timeline: ACTIVE_WINDOW,
-              unique: false,
+              unique: true,
             })
           );
 
