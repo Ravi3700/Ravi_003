@@ -16,7 +16,8 @@ export async function askPortfolioAssistant(
 ): Promise<{ text: string; relatedItems?: any[]; quickActions?: any[] }> {
   // 1. Attempt server-side Gemini AI response with strict prompt grounding
   try {
-    const res = await fetch('/api/assistant/chat', {
+    const apiBaseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    const res = await fetch(`${apiBaseUrl}/api/assistant/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
