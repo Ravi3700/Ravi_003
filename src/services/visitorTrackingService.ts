@@ -280,6 +280,8 @@ export class VisitorTrackingService {
         });
       } catch (txError) {
         handleFirestoreError(txError, OperationType.WRITE, 'visitors/stats transaction');
+        await this.startCounterApiFallback(onStatsUpdate);
+        return;
       }
 
       // Step 3: Register active session presence
@@ -295,9 +297,11 @@ export class VisitorTrackingService {
         );
       } catch (sessionError) {
         handleFirestoreError(sessionError, OperationType.WRITE, `active_sessions/${uid}`);
+        await this.startCounterApiFallback(onStatsUpdate);
+        return;
       }
 
-      // Step 4: Setup periodic heartbeat (every 60 seconds)
+      // Step 4: Setup periodic heartbeat (every 20 seconds)
       this.heartbeatInterval = setInterval(async () => {
         try {
           if (this.currentVisitorUid && db) {
@@ -353,12 +357,8 @@ export class VisitorTrackingService {
         },
         (error) => {
           handleFirestoreError(error, OperationType.GET, 'stats/portfolio');
-          onStatsUpdate({
-            ...UNCONFIGURED_STATS,
-            isLoading: false,
-            isFirebaseConnected: false,
-            error: error.message,
-          });
+          this.startCounterApiFallback(onStatsUpdate);
+
         }
       );
 
@@ -382,7 +382,7 @@ export class VisitorTrackingService {
                 timestampMs = data.lastSeenAt;
               }
 
-              // Count if active within the last 5 minutes
+              // Count if active within the last 2 minutes
               if (now - timestampMs <= ACTIVE_WINDOW_MS) {
                 activeCount++;
               }
@@ -391,13 +391,13 @@ export class VisitorTrackingService {
             }
           });
 
-          // Ensure at least 1 when active visitor is connected
           onStatsUpdate({
-            liveVisitors: Math.max(1, activeCount),
+            liveVisitors: activeCount,
           });
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, 'active_sessions');
+          this.startCounterApiFallback(onStatsUpdate);
         }
       );
     } catch (globalError) {
