@@ -15,7 +15,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
     totalUniqueVisitors,
     liveVisitors,
     isLoading,
-    isFirebaseConnected,
+    isLive,
     formatVisitorCount,
   } = useVisitorStats();
 
@@ -32,14 +32,14 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
         >
           {/* Live pulse dot */}
           <span className="relative flex h-2 w-2">
-            {isFirebaseConnected && (
+            {isLive && (
               <span
                 style={{ backgroundColor: 'var(--accent-emerald)' }}
                 className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
               />
             )}
             <span
-              style={{ backgroundColor: isFirebaseConnected ? 'var(--accent-emerald)' : '#94a3b8' }}
+              style={{ backgroundColor: isLive ? 'var(--accent-emerald)' : '#94a3b8' }}
               className="relative inline-flex rounded-full h-2 w-2"
             />
           </span>
@@ -58,7 +58,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
             </span>
           </div>
 
-          {isFirebaseConnected && liveVisitors > 0 && (
+          {isLive && liveVisitors > 0 && (
             <>
               <span className="text-slate-300 dark:text-slate-700">•</span>
               {/* Live visitor count */}
@@ -109,18 +109,18 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
                 )}
               </span>
               <span className="text-slate-300 font-medium">Total Unique Visitors</span>
-              {isFirebaseConnected ? (
+              {isLive ? (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Firebase Live
+                  Live Counter
                 </span>
               ) : (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-500/20 text-slate-400 border border-slate-500/30">
-                  Awaiting Config
+                  Live Counter Offline
                 </span>
               )}
             </div>
             <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-400">
-              {isFirebaseConnected && liveVisitors > 0 ? (
+              {isLive && liveVisitors > 0 ? (
                 <>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
