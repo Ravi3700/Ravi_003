@@ -125,15 +125,20 @@ export class VisitorTrackingService {
       });
     }
 
+    let presenceConfirmed = false;
+
     const updatePresence = async () => {
-      if (!this.visitorId) return;
+      if (!this.visitorId) return false;
       try {
         await counterRequest(PRESENCE_ACTION, PRESENCE_KEY, {
           userId: this.visitorId,
           behavior: 'view',
         });
+        presenceConfirmed = true;
+        return true;
       } catch {
-        // Presence is best-effort; the next heartbeat will refresh it.
+        presenceConfirmed = false;
+        return false;
       }
     };
 
@@ -145,13 +150,25 @@ export class VisitorTrackingService {
           readOnly: true,
         });
 
+        const apiCount = Math.max(0, Number(live?.value ?? 0));
+
         onStatsUpdate({
-          liveVisitors: Math.max(0, Number(live?.value ?? 0)),
+          // If the presence write succeeded but the aggregate endpoint briefly
+          // lags, the browser that just sent the heartbeat is still active.
+          liveVisitors: presenceConfirmed ? Math.max(1, apiCount) : apiCount,
           isLive: true,
           isFirebaseConnected: true,
           isLoading: false,
         });
       } catch (error) {
+        if (presenceConfirmed) {
+          onStatsUpdate({
+            liveVisitors: 1,
+            isLive: true,
+            isFirebaseConnected: true,
+            isLoading: false,
+          });
+        }
         console.warn('[Visitor Counter] Live counter error:', error);
       }
     };
