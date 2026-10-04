@@ -3,9 +3,10 @@ const NAMESPACE = 'ravi003portfolio';
 const TOTAL_ACTION = 'view';
 const TOTAL_KEY = 'site';
 const PRESENCE_ACTION = 'presence';
-const LIVE_WINDOW = '5m';
-const POLL_INTERVAL_MS = 15000;
-const HEARTBEAT_INTERVAL_MS = 60000;
+const PRESENCE_KEY = 'site';
+const LIVE_WINDOW = '2m';
+const POLL_INTERVAL_MS = 10000;
+const HEARTBEAT_INTERVAL_MS = 30000;
 
 export interface VisitorStats {
   totalUniqueVisitors: number | null;
@@ -127,7 +128,7 @@ export class VisitorTrackingService {
     const updatePresence = async () => {
       if (!this.visitorId) return;
       try {
-        await counterRequest(PRESENCE_ACTION, this.visitorId, {
+        await counterRequest(PRESENCE_ACTION, PRESENCE_KEY, {
           userId: this.visitorId,
           behavior: 'view',
         });
@@ -138,7 +139,7 @@ export class VisitorTrackingService {
 
     const readLiveCount = async () => {
       try {
-        const live = await counterRequest(PRESENCE_ACTION, 'any', {
+        const live = await counterRequest(PRESENCE_ACTION, PRESENCE_KEY, {
           timeline: LIVE_WINDOW,
           unique: true,
           readOnly: true,
