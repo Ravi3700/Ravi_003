@@ -172,30 +172,25 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2.5 leading-relaxed">
           <p>
-            This portfolio uses a shared visitor counter. A refresh keeps the same anonymous visitor identity, so normal refreshes do not create another unique visitor.
-          </p>
+            This portfolio uses a shared page-view counter. Every time the portfolio is opened or refreshed, the total increases by 1. The active display stays at 1.\n          </p>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 space-y-1.5">
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Unique counting:</strong> A persistent anonymous visitor ID prevents normal refreshes from adding another unique visitor.</span>
+              <span><strong>Every refresh counts:</strong> Each page load or refresh adds exactly 1 to the shared total.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Live presence:</strong> Visitors from different devices are included in the shared active count, which refreshes automatically without a page reload.</span>
+              <span><strong>No database setup:</strong> The shared counter service stores the running total, so no Firebase or personal database is required.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Refresh-safe:</strong> Refreshing the same browser/device does not add another unique visitor.</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Always active:</strong> An open portfolio page is counted as active; inactive visitors expire automatically from the live window.</span>
+              <span><strong>Active now:</strong> The display intentionally remains at 1.</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400">
-            * <em>Note:</em> The counter uses a shared public counting service with an anonymous visitor ID. Normal refreshes do not create new unique visitors. “Active now” uses a short heartbeat window, so closed/inactive visitors drop out automatically.
+            * <em>Note:</em> “Total Unique Visitors” is now treated as a total page-view count: every open/refresh adds 1. It is not a unique-person count.
           </p>
         </div>
 
