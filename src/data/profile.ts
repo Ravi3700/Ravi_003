@@ -25,7 +25,7 @@ export const userProfile: UserProfile = {
     github: "https://github.com/Ravi10300", // Replace with your GitHub profile URL
     linkedin: "https://linkedin.com/in/ravi003/", // Replace with your LinkedIn profile URL
   },
-  resumePath: "/Personal_Data/Data%20Analyst.pdf",
+  resumePath: `${import.meta.env.BASE_URL}Personal_Data/Data%20Analyst.pdf`,
   // =================================================================================
   // RESUME KNOWLEDGE SOURCE (Primary Source 2 for DataMate AI)
   // Paste your shareable Google Drive link below:
@@ -33,7 +33,7 @@ export const userProfile: UserProfile = {
   // =================================================================================
   resumeGoogleDriveUrl: "https://drive.google.com/file/d/1PnWGmVOjvnDPvTExZhLAYsNX6RSZpzND/view?usp=sharing", // Replace with your Google Drive resume link
   resumeSourceUrl: "https://drive.google.com/file/d/1PnWGmVOjvnDPvTExZhLAYsNX6RSZpzND/view?usp=sharing", // Backup / direct resume source URL
-  photoPath: "/Personal_Data/image_e.jpg",
+  photoPath: `${import.meta.env.BASE_URL}Personal_Data/image_e.jpg`,
   bioOverview:
     "I am a results-driven Data Analyst specializing in Business Intelligence, data modeling, and performance analytics. I transform raw, fragmented data into robust relational models, automated ETL workflows, and high-impact Power BI dashboards that empower stakeholders to make confident, data-backed strategic decisions.",
   daBio:
