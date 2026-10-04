@@ -77,7 +77,7 @@ export class VisitorTrackingService {
       // Every page load/refresh increments the same shared counter by exactly 1.
       // No localStorage, visitor ID, Firebase, or user database is required.
       const result = await readJson(
-        counterUrl(COUNTER_ACTION, COUNTER_KEY)
+        counterUrl(COUNTER_ACTION, COUNTER_KEY, { startNumber: '158' })
       );
 
       const total = Number(result?.value);
