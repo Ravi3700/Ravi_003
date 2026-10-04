@@ -184,11 +184,11 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Live presence:</strong> Each open browser sends a lightweight heartbeat and the live number is recalculated from activity in the last 5 minutes.</span>
+              <span><strong>Live presence:</strong> Each open browser sends a lightweight heartbeat and the live number is recalculated from activity in the last 2 minutes.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Automatic updates:</strong> The counter refreshes its live value every 15 seconds without a page reload.</span>
+              <span><strong>Automatic updates:</strong> The counter refreshes its live value every 10 seconds without a page reload.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
