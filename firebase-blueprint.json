@@ -1,0 +1,86 @@
+{
+  "entities": {
+    "Visitor": {
+      "title": "Visitor",
+      "description": "Anonymous visitor identity record for unique counting and deduplication",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Anonymous Authentication UID",
+          "maxLength": 128
+        },
+        "firstVisitAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of first portfolio visit"
+        },
+        "lastVisitAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of most recent portfolio visit"
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Heartbeat timestamp for live active presence"
+        }
+      },
+      "required": ["uid", "firstVisitAt", "lastVisitAt"]
+    },
+    "PortfolioStats": {
+      "title": "PortfolioStats",
+      "description": "Centralized aggregate statistics for the portfolio",
+      "type": "object",
+      "properties": {
+        "totalUniqueVisitors": {
+          "type": "integer",
+          "description": "Lifetime count of verified unique visitor browser/device identities"
+        },
+        "lastUpdatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the stats document was last modified"
+        }
+      },
+      "required": ["totalUniqueVisitors", "lastUpdatedAt"]
+    },
+    "ActiveSession": {
+      "title": "ActiveSession",
+      "description": "Short-lived active presence session for live concurrent visitor monitoring",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Anonymous UID of active visitor session",
+          "maxLength": 128
+        },
+        "lastSeenAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Heartbeat timestamp updated every 60 seconds"
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when current session started"
+        }
+      },
+      "required": ["uid", "lastSeenAt"]
+    }
+  },
+  "firestore": {
+    "/visitors/{visitorId}": {
+      "schema": { "$ref": "#/entities/Visitor" },
+      "description": "Collection of individual unique visitor documents keyed by Anonymous UID"
+    },
+    "/stats/{statId}": {
+      "schema": { "$ref": "#/entities/PortfolioStats" },
+      "description": "Global portfolio statistics documents (e.g. /stats/portfolio)"
+    },
+    "/active_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ActiveSession" },
+      "description": "Transient active presence documents for computing live online visitors"
+    }
+  }
+}
