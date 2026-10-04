@@ -121,10 +121,8 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
                       {liveVisitors} {liveVisitors === 1 ? 'Visitor Active Now' : 'Visitors Active Now'}
                     </span>
                   </span>
-                  <span>•</span>
                 </>
               ) : null}
-              <span>Unique browser/device counting • live activity updates automatically</span>
             </div>
           </div>
         </div>
