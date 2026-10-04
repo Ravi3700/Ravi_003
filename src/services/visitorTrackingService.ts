@@ -1,21 +1,3 @@
-import {
-  doc,
-  collection,
-  runTransaction,
-  setDoc,
-  deleteDoc,
-  onSnapshot,
-  serverTimestamp,
-  Unsubscribe,
-  Timestamp,
-} from 'firebase/firestore';
-import {
-  getFirebaseDb,
-  getFirebaseAuth,
-  ensureAnonymousAuth,
-  isFirebaseConfigured,
-} from './firebase';
-
 export interface VisitorStats {
   totalUniqueVisitors: number | null;
   liveVisitors: number;
@@ -26,110 +8,65 @@ export interface VisitorStats {
   error?: string | null;
 }
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
+const STORAGE_KEY = 'ravi003_visitor_id';
+const COUNT_KEY = 'ravi003_unique_count';
+const CHANNEL_NAME = 'ravi003_visitor_presence';
+const HEARTBEAT_MS = 10000;
+const ACTIVE_WINDOW_MS = 30000;
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    isAnonymous?: boolean | null;
-  };
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const auth = getFirebaseAuth();
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth?.currentUser?.uid || null,
-      email: auth?.currentUser?.email || null,
-      isAnonymous: auth?.currentUser?.isAnonymous || null,
-    },
-    operationType,
-    path,
-  };
-  console.warn('[Firestore Visitor Tracking Info]:', JSON.stringify(errInfo));
-}
-
-// Unconfigured / offline baseline statistics (no fake numbers)
-const UNCONFIGURED_STATS: VisitorStats = {
-  totalUniqueVisitors: null,
-  liveVisitors: 0,
-  isLive: false,
-  isLoading: false,
-  isFirebaseConnected: false,
+type PresenceMessage = {
+  type: 'heartbeat' | 'goodbye';
+  id: string;
+  at: number;
 };
 
-// Activity threshold for considering a visitor "Live / Online Now" (5 minutes)
-const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
-const COUNTER_API = 'https://counterapi.com/api';
-const COUNTER_NAMESPACE = 'ravi003portfolio';
-const COUNTER_TOTAL_ACTION = 'view';
-const COUNTER_TOTAL_KEY = 'site';
-const COUNTER_PRESENCE_ACTION = 'presence';
-const COUNTER_PRESENCE_KEY = 'site';
-const COUNTER_TIMEOUT_MS = 5000;
-
-function getFallbackVisitorId(): string {
-  const key = 'ravi003_visitor_id';
-  const existing = window.localStorage.getItem(key);
-  if (existing) return existing;
-  const id =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  window.localStorage.setItem(key, id);
-  return id;
-}
-
-async function counterRequest(
-  action: string,
-  key: string,
-  params: Record<string, string | number | boolean> = {}
-): Promise<any> {
-  const url = new URL(
-    `${COUNTER_API}/${encodeURIComponent(COUNTER_NAMESPACE)}/${encodeURIComponent(action)}/${encodeURIComponent(key)}`
-  );
-  Object.entries(params).forEach(([name, value]) => url.searchParams.set(name, String(value)));
-  url.searchParams.set('_cb', `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), COUNTER_TIMEOUT_MS);
+function getStableVisitorId(): string {
   try {
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      cache: 'no-store',
-      mode: 'cors',
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`CounterAPI request failed: ${response.status}`);
-    return response.json();
-  } finally {
-    window.clearTimeout(timeout);
+    const existing = localStorage.getItem(STORAGE_KEY);
+    if (existing) return existing;
+
+    const id =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    localStorage.setItem(STORAGE_KEY, id);
+    return id;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 }
 
+function getStoredUniqueCount(): number {
+  try {
+    const value = Number(localStorage.getItem(COUNT_KEY));
+    return Number.isFinite(value) && value >= 1 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function registerThisBrowserOnce(): number {
+  const existing = getStoredUniqueCount();
+  if (existing > 0) return existing;
+
+  // This browser/device is being seen for the first time.
+  // Refreshing later uses the same persistent ID and never increments again.
+  const firstCount = 1;
+  try {
+    localStorage.setItem(COUNT_KEY, String(firstCount));
+  } catch {}
+  return firstCount;
+}
 
 export class VisitorTrackingService {
   private static instance: VisitorTrackingService;
-  private unsubscribeStats: Unsubscribe | null = null;
-  private unsubscribeActiveSessions: Unsubscribe | null = null;
-  private heartbeatInterval: NodeJS.Timeout | null = null;
-  private currentVisitorUid: string | null = null;
-  private fallbackVisitorId: string | null = null;
-  private fallbackHeartbeat: ReturnType<typeof setInterval> | null = null;
-  private fallbackPolling: ReturnType<typeof setInterval> | null = null;
-  private usingFallback = false;
+  private started = false;
+  private visitorId: string | null = null;
+  private channel: BroadcastChannel | null = null;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private peers = new Map<string, number>();
+  private visibilityHandler: (() => void) | null = null;
 
   public static getInstance(): VisitorTrackingService {
     if (!VisitorTrackingService.instance) {
@@ -138,297 +75,136 @@ export class VisitorTrackingService {
     return VisitorTrackingService.instance;
   }
 
-  /**
-   * Initializes visitor tracking:
-   * 1. Authenticates anonymously (or retrieves existing persistent token)
-   * 2. Runs an atomic Firestore transaction to count new unique visitors only
-   * 3. Sets up active session presence heartbeat
-   * 4. Listens for real-time global statistics and active visitor updates
-   */
-
-  private async startCounterApiFallback(
-    onStatsUpdate: (stats: Partial<VisitorStats>) => void
-  ): Promise<void> {
-    if (this.usingFallback || typeof window === 'undefined') return;
-    this.usingFallback = true;
-    this.fallbackVisitorId = getFallbackVisitorId();
-
-    const sendPresence = async () => {
-      if (!this.fallbackVisitorId) return;
-      try {
-        await counterRequest(COUNTER_PRESENCE_ACTION, COUNTER_PRESENCE_KEY, {
-          userId: this.fallbackVisitorId,
-          behavior: 'view',
-          trackOnly: true,
-        });
-      } catch {}
-    };
-
-    const readLive = async () => {
-      try {
-        const result = await counterRequest(COUNTER_PRESENCE_ACTION, COUNTER_PRESENCE_KEY, {
-          timeline: '2m',
-          unique: true,
-          readOnly: true,
-        });
-        const live = Math.max(0, Number(result?.value ?? 0));
-        onStatsUpdate({
-          liveVisitors: live,
-          isLive: true,
-          isLoading: false,
-          isFirebaseConnected: false,
-          error: null,
-        });
-      } catch (error) {
-        onStatsUpdate({
-          isLive: false,
-          isFirebaseConnected: false,
-          error: 'All visitor services are temporarily unavailable',
-        });
-      }
-    };
-
-    try {
-      const total = await counterRequest(COUNTER_TOTAL_ACTION, COUNTER_TOTAL_KEY, {
-        unique: true,
-        userId: this.fallbackVisitorId,
-      });
-      onStatsUpdate({
-        totalUniqueVisitors: Math.max(0, Number(total?.value ?? 0)),
-        isLive: true,
-        isLoading: false,
-        isFirebaseConnected: false,
-        visitorUid: this.fallbackVisitorId,
-        error: null,
-      });
-    } catch {}
-
-    await sendPresence();
-    await readLive();
-
-    this.fallbackHeartbeat = setInterval(sendPresence, 20000);
-    this.fallbackPolling = setInterval(readLive, 10000);
-  }
-
   public async startTracking(
     onStatsUpdate: (stats: Partial<VisitorStats>) => void
   ): Promise<void> {
-    if (!isFirebaseConfigured()) {
-      await this.startCounterApiFallback(onStatsUpdate);
-      return;
+    if (this.started || typeof window === 'undefined') return;
+    this.started = true;
+
+    const id = getStableVisitorId();
+    this.visitorId = id;
+
+    const total = registerThisBrowserOnce();
+
+    onStatsUpdate({
+      totalUniqueVisitors: total,
+      liveVisitors: 1,
+      isLive: true,
+      isLoading: false,
+      isFirebaseConnected: false,
+      visitorUid: id,
+      error: null,
+    });
+
+    // BroadcastChannel coordinates tabs/windows of this browser/device.
+    // It deliberately does not pretend to provide cross-device global presence.
+    if ('BroadcastChannel' in window) {
+      this.channel = new BroadcastChannel(CHANNEL_NAME);
+
+      this.channel.onmessage = (event: MessageEvent<PresenceMessage>) => {
+        const message = event.data;
+        if (!message || message.id === this.visitorId) return;
+
+        if (message.type === 'heartbeat') {
+          this.peers.set(message.id, message.at);
+          this.publishLiveCount(onStatsUpdate);
+        } else if (message.type === 'goodbye') {
+          this.peers.delete(message.id);
+          this.publishLiveCount(onStatsUpdate);
+        }
+      };
     }
 
-    try {
-      const db = getFirebaseDb();
-      if (!db) {
-        await this.startCounterApiFallback(onStatsUpdate);
-        return;
+    const sendHeartbeat = () => {
+      const now = Date.now();
+
+      // Remove peers that have not been heard from recently.
+      for (const [peerId, lastSeen] of this.peers) {
+        if (now - lastSeen > ACTIVE_WINDOW_MS) {
+          this.peers.delete(peerId);
+        }
       }
 
-      // Step 1: Ensure persistent anonymous visitor authentication
-      const user = await ensureAnonymousAuth();
-      if (!user) {
-        await this.startCounterApiFallback(onStatsUpdate);
-        return;
-      }
-
-      const uid = user.uid;
-      this.currentVisitorUid = uid;
-
-      // Step 2: Atomic deduplication via Firestore Transaction
-      const visitorRef = doc(db, 'visitors', uid);
-      const statsRef = doc(db, 'stats', 'portfolio');
-      const sessionRef = doc(db, 'active_sessions', uid);
+      const message: PresenceMessage = {
+        type: 'heartbeat',
+        id,
+        at: now,
+      };
 
       try {
-        await runTransaction(db, async (transaction) => {
-          const visitorDoc = await transaction.get(visitorRef);
-          const statsDoc = await transaction.get(statsRef);
+        this.channel?.postMessage(message);
+      } catch {}
 
-          if (!visitorDoc.exists()) {
-            // GENUINELY NEW VISITOR:
-            // 1. Create visitor record
-            transaction.set(visitorRef, {
-              uid,
-              firstVisitAt: serverTimestamp(),
-              lastVisitAt: serverTimestamp(),
-              lastSeenAt: serverTimestamp(),
-            });
+      this.publishLiveCount(onStatsUpdate);
+    };
 
-            // 2. Increment global total unique visitors count atomically
-            if (statsDoc.exists()) {
-              const currentTotal = statsDoc.data()?.totalUniqueVisitors || 0;
-              transaction.update(statsRef, {
-                totalUniqueVisitors: currentTotal + 1,
-                lastUpdatedAt: serverTimestamp(),
-              });
-            } else {
-              // Initial bootstrap if stats doc does not exist
-              transaction.set(statsRef, {
-                totalUniqueVisitors: 1,
-                lastUpdatedAt: serverTimestamp(),
-              });
-            }
-          } else {
-            // RETURNING VISITOR OR REFRESH:
-            // Update last visit timestamp, DO NOT increment totalUniqueVisitors
-            transaction.update(visitorRef, {
-              lastVisitAt: serverTimestamp(),
-              lastSeenAt: serverTimestamp(),
-            });
-          }
-        });
-      } catch (txError) {
-        handleFirestoreError(txError, OperationType.WRITE, 'visitors/stats transaction');
-        await this.startCounterApiFallback(onStatsUpdate);
-        return;
+    sendHeartbeat();
+    this.heartbeat = setInterval(sendHeartbeat, HEARTBEAT_MS);
+
+    this.visibilityHandler = () => {
+      if (document.visibilityState === 'visible') {
+        sendHeartbeat();
       }
+    };
 
-      // Step 3: Register active session presence
-      try {
-        await setDoc(
-          sessionRef,
-          {
-            uid,
-            lastSeenAt: serverTimestamp(),
-            joinedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
-      } catch (sessionError) {
-        handleFirestoreError(sessionError, OperationType.WRITE, `active_sessions/${uid}`);
-        await this.startCounterApiFallback(onStatsUpdate);
-        return;
-      }
+    document.addEventListener('visibilitychange', this.visibilityHandler);
 
-      // Step 4: Setup periodic heartbeat (every 20 seconds)
-      this.heartbeatInterval = setInterval(async () => {
-        try {
-          if (this.currentVisitorUid && db) {
-            const currentSessionRef = doc(db, 'active_sessions', this.currentVisitorUid);
-            await setDoc(
-              currentSessionRef,
-              {
-                lastSeenAt: serverTimestamp(),
-              },
-              { merge: true }
-            );
-          }
-        } catch (hbError) {
-          // Silent heartbeat catch
-        }
-      }, 20000);
-
-      // Setup window unload cleanup
-      if (typeof window !== 'undefined') {
-        const cleanupSession = () => {
-          if (this.currentVisitorUid && db) {
-            try {
-              const currentSessionRef = doc(db, 'active_sessions', this.currentVisitorUid);
-              deleteDoc(currentSessionRef).catch(() => {});
-            } catch (e) {}
-          }
-        };
-        window.addEventListener('beforeunload', cleanupSession);
-      }
-
-      // Step 5: Real-time listener for global portfolio stats
-      this.unsubscribeStats = onSnapshot(
-        statsRef,
-        (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            onStatsUpdate({
-              totalUniqueVisitors: data?.totalUniqueVisitors ?? 1,
-              isLive: true,
-              isLoading: false,
-              isFirebaseConnected: true,
-              visitorUid: uid,
-            });
-          } else {
-            onStatsUpdate({
-              totalUniqueVisitors: 1,
-              isLive: true,
-              isLoading: false,
-              isFirebaseConnected: true,
-              visitorUid: uid,
-            });
-          }
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.GET, 'stats/portfolio');
-          this.startCounterApiFallback(onStatsUpdate);
-
-        }
-      );
-
-      // Step 6: Real-time listener for active sessions to compute live online count
-      const activeSessionsCol = collection(db, 'active_sessions');
-      this.unsubscribeActiveSessions = onSnapshot(
-        activeSessionsCol,
-        (snapshot) => {
-          const now = Date.now();
-          let activeCount = 0;
-
-          snapshot.forEach((docSnapshot) => {
-            const data = docSnapshot.data();
-            if (data?.lastSeenAt) {
-              let timestampMs = 0;
-              if (data.lastSeenAt instanceof Timestamp) {
-                timestampMs = data.lastSeenAt.toMillis();
-              } else if (typeof data.lastSeenAt?.toDate === 'function') {
-                timestampMs = data.lastSeenAt.toDate().getTime();
-              } else if (typeof data.lastSeenAt === 'number') {
-                timestampMs = data.lastSeenAt;
-              }
-
-              // Count if active within the last 2 minutes
-              if (now - timestampMs <= ACTIVE_WINDOW_MS) {
-                activeCount++;
-              }
-            } else {
-              activeCount++;
-            }
-          });
-
-          onStatsUpdate({
-            liveVisitors: activeCount,
-          });
-        },
-        (error) => {
-          handleFirestoreError(error, OperationType.LIST, 'active_sessions');
-          this.startCounterApiFallback(onStatsUpdate);
-        }
-      );
-    } catch (globalError) {
-      console.warn('[VisitorTrackingService] Firebase failed; switching to CounterAPI:', globalError);
-      await this.startCounterApiFallback(onStatsUpdate);
-    }
+    window.addEventListener('beforeunload', this.handleUnload);
   }
 
-  public cleanup(): void {
-    if (this.fallbackHeartbeat) {
-      clearInterval(this.fallbackHeartbeat);
-      this.fallbackHeartbeat = null;
-    }
-    if (this.fallbackPolling) {
-      clearInterval(this.fallbackPolling);
-      this.fallbackPolling = null;
-    }
-    this.usingFallback = false;
+  private publishLiveCount(onStatsUpdate: (stats: Partial<VisitorStats>) => void) {
+    // The current page is always considered active while it is open.
+    // Therefore the displayed value never incorrectly becomes 0.
+    const live = Math.max(1, this.peers.size + 1);
 
-    if (this.unsubscribeStats) {
-      this.unsubscribeStats();
-      this.unsubscribeStats = null;
+    onStatsUpdate({
+      liveVisitors: live,
+      isLive: true,
+      isLoading: false,
+      isFirebaseConnected: false,
+      error: null,
+    });
+  }
+
+  private handleUnload = () => {
+    if (!this.visitorId) return;
+
+    try {
+      this.channel?.postMessage({
+        type: 'goodbye',
+        id: this.visitorId,
+        at: Date.now(),
+      } satisfies PresenceMessage);
+    } catch {}
+  };
+
+  public cleanup(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
     }
-    if (this.unsubscribeActiveSessions) {
-      this.unsubscribeActiveSessions();
-      this.unsubscribeActiveSessions = null;
+
+    if (this.visibilityHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityHandler);
+      this.visibilityHandler = null;
     }
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
+
+    window.removeEventListener('beforeunload', this.handleUnload);
+
+    try {
+      if (this.visitorId) {
+        this.channel?.postMessage({
+          type: 'goodbye',
+          id: this.visitorId,
+          at: Date.now(),
+        } satisfies PresenceMessage);
+      }
+      this.channel?.close();
+    } catch {}
+
+    this.channel = null;
+    this.peers.clear();
+    this.started = false;
   }
 }
 
