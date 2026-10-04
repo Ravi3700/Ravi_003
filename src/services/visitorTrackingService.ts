@@ -78,9 +78,7 @@ export class VisitorTrackingService {
   private unsubscribeStats: Unsubscribe | null = null;
   private unsubscribeActiveSessions: Unsubscribe | null = null;
   private heartbeatInterval: NodeJS.Timeout | null = null;
-  private liveRecalculationInterval: NodeJS.Timeout | null = null;
   private currentVisitorUid: string | null = null;
-  private started = false;
 
   public static getInstance(): VisitorTrackingService {
     if (!VisitorTrackingService.instance) {
@@ -99,13 +97,7 @@ export class VisitorTrackingService {
   public async startTracking(
     onStatsUpdate: (stats: Partial<VisitorStats>) => void
   ): Promise<void> {
-    // React development/StrictMode can mount the provider more than once.
-    // Never create duplicate sessions or heartbeats for the same page.
-    if (this.started) return;
-    this.started = true;
-
     if (!isFirebaseConfigured()) {
-      this.started = false;
       onStatsUpdate({
         ...UNCONFIGURED_STATS,
         isLoading: false,
@@ -117,7 +109,6 @@ export class VisitorTrackingService {
     try {
       const db = getFirebaseDb();
       if (!db) {
-        this.started = false;
         onStatsUpdate({ ...UNCONFIGURED_STATS, isLoading: false, isFirebaseConnected: false });
         return;
       }
@@ -125,7 +116,6 @@ export class VisitorTrackingService {
       // Step 1: Ensure persistent anonymous visitor authentication
       const user = await ensureAnonymousAuth();
       if (!user) {
-        this.started = false;
         onStatsUpdate({ ...UNCONFIGURED_STATS, isLoading: false, isFirebaseConnected: false });
         return;
       }
@@ -262,45 +252,42 @@ export class VisitorTrackingService {
 
       // Step 6: Real-time listener for active sessions to compute live online count
       const activeSessionsCol = collection(db, 'active_sessions');
-      let latestActiveSessions: Array<{ lastSeenAt?: Timestamp | number | { toDate?: () => Date } }> = [];
-
-      const recalculateLiveVisitors = () => {
-        const now = Date.now();
-        const activeCount = latestActiveSessions.filter((data) => {
-          if (!data?.lastSeenAt) return true;
-
-          let timestampMs = 0;
-          if (data.lastSeenAt instanceof Timestamp) {
-            timestampMs = data.lastSeenAt.toMillis();
-          } else if (typeof data.lastSeenAt?.toDate === 'function') {
-            timestampMs = data.lastSeenAt.toDate().getTime();
-          } else if (typeof data.lastSeenAt === 'number') {
-            timestampMs = data.lastSeenAt;
-          }
-
-          return timestampMs > 0 && now - timestampMs <= ACTIVE_WINDOW_MS;
-        }).length;
-
-        onStatsUpdate({ liveVisitors: activeCount });
-      };
-
       this.unsubscribeActiveSessions = onSnapshot(
         activeSessionsCol,
         (snapshot) => {
-          latestActiveSessions = [];
+          const now = Date.now();
+          let activeCount = 0;
+
           snapshot.forEach((docSnapshot) => {
-            latestActiveSessions.push(docSnapshot.data() as typeof latestActiveSessions[number]);
+            const data = docSnapshot.data();
+            if (data?.lastSeenAt) {
+              let timestampMs = 0;
+              if (data.lastSeenAt instanceof Timestamp) {
+                timestampMs = data.lastSeenAt.toMillis();
+              } else if (typeof data.lastSeenAt?.toDate === 'function') {
+                timestampMs = data.lastSeenAt.toDate().getTime();
+              } else if (typeof data.lastSeenAt === 'number') {
+                timestampMs = data.lastSeenAt;
+              }
+
+              // Count if active within the last 5 minutes
+              if (now - timestampMs <= ACTIVE_WINDOW_MS) {
+                activeCount++;
+              }
+            } else {
+              activeCount++;
+            }
           });
-          recalculateLiveVisitors();
+
+          // Ensure at least 1 when active visitor is connected
+          onStatsUpdate({
+            liveVisitors: Math.max(1, activeCount),
+          });
         },
         (error) => {
           handleFirestoreError(error, OperationType.LIST, 'active_sessions');
         }
       );
-
-      // Recalculate even when Firestore has no new write. This removes stale
-      // sessions automatically at the 5-minute boundary without a page refresh.
-      this.liveRecalculationInterval = setInterval(recalculateLiveVisitors, 15000);
     } catch (globalError) {
       console.warn('[VisitorTrackingService] Initialization fallback:', globalError);
       onStatsUpdate({
@@ -324,11 +311,6 @@ export class VisitorTrackingService {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-    if (this.liveRecalculationInterval) {
-      clearInterval(this.liveRecalculationInterval);
-      this.liveRecalculationInterval = null;
-    }
-    this.started = false;
   }
 }
 
