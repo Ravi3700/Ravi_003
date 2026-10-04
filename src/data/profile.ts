@@ -6,7 +6,7 @@ export const userProfile: UserProfile = {
   rotatingRoles: [
   "Data Analyst ...",
   "Business Analyst ...",
-  "Power BI Developer ...",
+  "Power BI Developer ",
   "Content Creator ...",
   ],
   secondaryTitle: "Power BI | SQL | Excel | DAX | Data Modeling | Business Intelligence",
