@@ -128,8 +128,8 @@ export class VisitorTrackingService {
       if (!this.visitorId) return;
       try {
         await counterRequest(PRESENCE_ACTION, this.visitorId, {
-          trackOnly: true,
           userId: this.visitorId,
+          behavior: 'view',
         });
       } catch {
         // Presence is best-effort; the next heartbeat will refresh it.
