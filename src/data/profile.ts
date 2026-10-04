@@ -7,7 +7,6 @@ export const userProfile: UserProfile = {
   "Data Analyst ...",
   "Business Analyst ...",
   "Power BI Developer ...",
-  "BI Analyst ......",
   "Content Creator ...",
   ],
   secondaryTitle: "Power BI | SQL | Excel | DAX | Data Modeling | Business Intelligence",
