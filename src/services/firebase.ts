@@ -83,7 +83,8 @@ export const getFirebaseAuth = (): Auth | null => {
 
   try {
     authInstance = getAuth(app);
-    // Explicitly configure browser local persistence for persistent anonymous visitor identity
+    // Persistence is finalized in ensureAnonymousAuth before the UID is read.
+    // Keep this fallback setup here for normal browser initialization.
     if (typeof window !== 'undefined') {
       setPersistence(authInstance, browserLocalPersistence).catch(() => {
         try {
@@ -120,11 +121,19 @@ export const ensureAnonymousAuth = async (): Promise<User | null> => {
   const auth = getFirebaseAuth();
   if (!auth) return null;
 
-  if (auth.currentUser) {
-    return auth.currentUser;
-  }
-
   try {
+    // IMPORTANT: wait for persistence before checking/signing in. This prevents
+    // a fresh anonymous UID from being created again after a page refresh.
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+    } catch {
+      await setPersistence(auth, inMemoryPersistence);
+    }
+
+    if (auth.currentUser) {
+      return auth.currentUser;
+    }
+
     const cred = await signInAnonymously(auth);
     return cred.user;
   } catch (error) {
