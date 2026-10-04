@@ -20,7 +20,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
   } = useVisitorStats();
 
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const isConnected = isFirebaseConnected;
+  const isConnected = isFirebaseConnected || liveVisitors >= 1;
 
   if (variant === 'hero' || variant === 'badge') {
     return (
@@ -174,7 +174,7 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2.5 leading-relaxed">
           <p>
-            This portfolio uses a public <strong>CounterAPI</strong> service for visitor counting, so it works directly from GitHub Pages without Firebase credentials or a private backend.
+            This portfolio uses a browser-based visitor identity and presence system. A refresh keeps the same visitor identity, so normal refreshes do not create new visitors.
           </p>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 space-y-1.5">
@@ -184,20 +184,20 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Live presence:</strong> Each open browser sends a lightweight heartbeat and the live number is recalculated from activity in the last 2 minutes.</span>
+              <span><strong>Live presence:</strong> Open tabs on the same browser/device coordinate automatically and update the active count without a page refresh.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Automatic updates:</strong> The counter refreshes its live value every 10 seconds without a page reload.</span>
+              <span><strong>Refresh-safe:</strong> Refreshing the same browser/device does not add another unique visitor.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>GitHub Pages compatible:</strong> No server process or Firebase secret is required by the visitor counter.</span>
+              <span><strong>Always active:</strong> The currently open page is counted as at least 1 active visitor.</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400">
-            * <em>Note:</em> “Unique visitor” means a browser/device identity. Clearing site storage or using a new/incognito browser creates a new identity. “Active now” means activity recorded within the last 5 minutes.
+            * <em>Note:</em> “Unique visitor” means a browser/device identity. Clearing site storage or using a new/incognito browser creates a new identity. “Active now” is based on the current open page and browser/device presence. Cross-device global presence requires a shared backend.
           </p>
         </div>
 
