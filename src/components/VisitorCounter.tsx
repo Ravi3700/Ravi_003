@@ -53,7 +53,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
               )}
             </span>
             <span style={{ color: 'var(--text-muted)' }} className="text-[11px]">
-              Total Unique Visitors
+              Total Visitors
             </span>
           </div>
 
@@ -101,7 +101,7 @@ export const VisitorCounter: React.FC<VisitorCounterProps> = ({
                   <span>{formatVisitorCount(totalUniqueVisitors)}</span>
                 )}
               </span>
-              <span className="text-slate-300 font-medium">Total Unique Visitors</span>
+              <span className="text-slate-300 font-medium">Total Visitors</span>
               {isConnected ? (
                 <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Live Counter
@@ -190,7 +190,7 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
 
           <p className="text-[11px] text-slate-400">
-            * <em>Note:</em> “Total Unique Visitors” is now treated as a total page-view count: every open/refresh adds 1. It is not a unique-person count.
+            * <em>Note:</em> “Total Visitors” is now treated as a total page-view count: every open/refresh adds 1. It is not a unique-person count.
           </p>
         </div>
 
