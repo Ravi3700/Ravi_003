@@ -16,8 +16,15 @@ export async function askPortfolioAssistant(
 ): Promise<{ text: string; relatedItems?: any[]; quickActions?: any[] }> {
   // 1. Attempt server-side Gemini AI response with strict prompt grounding
   try {
-    const apiBaseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
-    const res = await fetch(`${apiBaseUrl}/api/assistant/chat`, {
+    const configuredApiBaseUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+
+    // GitHub Pages is static. When no separate backend is configured, skip the
+    // guaranteed 404 API request and use the grounded local portfolio engine.
+    if (!configuredApiBaseUrl) {
+      return generateGroundedPortfolioResponse(userQuery);
+    }
+
+    const res = await fetch(`${configuredApiBaseUrl}/api/assistant/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
