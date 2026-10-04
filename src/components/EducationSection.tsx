@@ -124,7 +124,7 @@ export const EducationSection: React.FC = () => {
                   {/* Metadata (Date & Location & Credential Link) */}
                   <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between gap-2 text-xs text-slate-600 dark:text-slate-400 shrink-0">
                     {displayTime && (
-                      <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-750 px-3 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-700">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200 bg-blue-50 dark:bg-blue-900/30 px-3 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-700">
                         <Calendar className="w-3.5 h-3.5 text-blue-500" />
                         <span>{displayTime}</span>
                       </div>
