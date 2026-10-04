@@ -172,17 +172,17 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="text-xs text-slate-600 dark:text-slate-300 space-y-2.5 leading-relaxed">
           <p>
-            This portfolio uses a browser-based visitor identity and presence system. A refresh keeps the same visitor identity, so normal refreshes do not create new visitors.
+            This portfolio uses a shared visitor counter. A refresh keeps the same anonymous visitor identity, so normal refreshes do not create another unique visitor.
           </p>
 
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 space-y-1.5">
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Unique counting:</strong> A persistent anonymous browser/device ID prevents normal refreshes from adding another unique visitor.</span>
+              <span><strong>Unique counting:</strong> A persistent anonymous visitor ID prevents normal refreshes from adding another unique visitor.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Live presence:</strong> Open tabs on the same browser/device coordinate automatically and update the active count without a page refresh.</span>
+              <span><strong>Live presence:</strong> Visitors from different devices are included in the shared active count, which refreshes automatically without a page reload.</span>
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
@@ -190,12 +190,12 @@ const VisitorInfoModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
             <div className="flex items-start gap-2">
               <span className="text-emerald-500 font-bold">✓</span>
-              <span><strong>Always active:</strong> The currently open page is counted as at least 1 active visitor.</span>
+              <span><strong>Always active:</strong> An open portfolio page is counted as active; inactive visitors expire automatically from the live window.</span>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-400">
-            * <em>Note:</em> “Unique visitor” means a browser/device identity. Clearing site storage or using a new/incognito browser creates a new identity. “Active now” is based on the current open page and browser/device presence. Cross-device global presence requires a shared backend.
+            * <em>Note:</em> The counter uses a shared public counting service with an anonymous visitor ID. Normal refreshes do not create new unique visitors. “Active now” uses a short heartbeat window, so closed/inactive visitors drop out automatically.
           </p>
         </div>
 
